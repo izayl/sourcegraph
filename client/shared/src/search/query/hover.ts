@@ -201,9 +201,12 @@ const inside = (column: number) => ({ range }: Pick<Token | DecoratedToken, 'ran
  */
 export const getHoverResult = (
     tokens: Token[],
-    { column }: Pick<Monaco.Position, 'column'>
+    position: Monaco.Position,
+    textModel: Monaco.editor.ITextModel
 ): Monaco.languages.Hover | null => {
-    const tokensAtCursor = tokens.flatMap(decorate).filter(inside(column))
+    console.log(`position: ${JSON.stringify(position)}`)
+    console.log(`offset: ${textModel.getOffsetAt(position)}`)
+    const tokensAtCursor = tokens.flatMap(decorate).filter(inside(textModel.getOffsetAt(position)))
     if (tokensAtCursor.length === 0) {
         return null
     }
@@ -220,7 +223,7 @@ export const getHoverResult = (
                             : resolvedFilter.definition.description
                     )
                     // Add 1 to end of range to include the ':'.
-                    range = toMonacoRange({ start: token.range.start, end: token.range.end + 1 })
+                    range = toMonacoRange({ start: token.range.start, end: token.range.end + 1 }, textModel)
                 }
                 break
             }
@@ -229,13 +232,13 @@ export const getHoverResult = (
             case 'metaRepoRevisionSeparator':
             case 'metaSelector':
                 values.push(toHover(token))
-                range = toMonacoRange(token.range)
+                range = toMonacoRange(token.range, textModel)
                 break
             case 'metaRegexp':
             case 'metaStructural':
             case 'metaPredicate':
                 values.push(toHover(token))
-                range = toMonacoRange(token.groupRange ? token.groupRange : token.range)
+                range = toMonacoRange(token.groupRange ? token.groupRange : token.range, textModel)
                 break
         }
     })

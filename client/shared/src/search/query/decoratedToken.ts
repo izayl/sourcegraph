@@ -1096,9 +1096,17 @@ export const getMonacoTokens = (tokens: Token[]): Monaco.languages.IToken[] =>
 /**
  * Converts a zero-indexed, single-line {@link CharacterRange} to a Monaco {@link IRange}.
  */
-export const toMonacoRange = ({ start, end }: CharacterRange): Monaco.IRange => ({
-    startLineNumber: 1,
-    endLineNumber: 1,
-    startColumn: start + 1,
-    endColumn: end + 1,
-})
+export const toMonacoRange = ({ start, end }: CharacterRange, textModel?: Monaco.editor.ITextModel): Monaco.IRange =>
+    textModel
+        ? {
+              startLineNumber: textModel.getPositionAt(start).lineNumber,
+              endLineNumber: textModel.getPositionAt(start).lineNumber,
+              startColumn: textModel.getPositionAt(start).column,
+              endColumn: textModel.getPositionAt(end).column,
+          }
+        : {
+              startLineNumber: 1,
+              endLineNumber: 1,
+              startColumn: start + 1,
+              endColumn: end + 1,
+          }

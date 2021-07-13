@@ -84,7 +84,7 @@ export function getProviders(
                     .pipe(
                         first(),
                         map(({ scanned }) =>
-                            scanned.type === 'error' ? null : getHoverResult(scanned.term, position)
+                            scanned.type === 'error' ? null : getHoverResult(scanned.term, position, textModel)
                         ),
                         takeUntil(fromEventPattern(handler => token.onCancellationRequested(handler)))
                     )
