@@ -18,6 +18,7 @@ import (
 
 type handler struct {
 	options      Options
+	queueOptions QueueOptions
 	clock        glock.Clock
 	executors    map[string]*executorMeta
 	m            sync.Mutex // protects executors
@@ -27,9 +28,6 @@ type handler struct {
 type Options struct {
 	// Port is the port on which to listen for HTTP connections.
 	Port int
-
-	// QueueOptions is a map from queue name to options specific to that queue.
-	QueueOptions map[string]QueueOptions
 
 	// RequeueDelay controls how far into the future to make a job record visible to the job
 	// queue once the currently processing executor has become unresponsive.
@@ -65,15 +63,15 @@ type executorMeta struct {
 
 type jobMeta struct {
 	queueName string
-	record    workerutil.Record
+	recordID  int
 	started   time.Time
 }
 
-func newHandler(options Options, clock glock.Clock) *handler {
-	return newHandlerWithMetrics(options, clock, &observation.TestContext)
+func newHandler(options Options, queueOptions QueueOptions, clock glock.Clock) *handler {
+	return newHandlerWithMetrics(options, queueOptions, clock, &observation.TestContext)
 }
 
-func newHandlerWithMetrics(options Options, clock glock.Clock, observationContext *observation.Context) *handler {
+func newHandlerWithMetrics(options Options, queueOptions QueueOptions, clock glock.Clock, observationContext *observation.Context) *handler {
 	return &handler{
 		options:      options,
 		clock:        clock,
@@ -96,15 +94,6 @@ func (m *handler) dequeue(ctx context.Context, queueName, executorName, executor
 		return apiclient.Job{}, false, ErrUnknownQueue
 	}
 
-	defer func() {
-		if !dequeued {
-			// Ensure that if we do not dequeue a record successfully we do not
-			// leak from the semaphore. This will happen if the dequeue call fails
-			// or if there are no records to process
-			m.dequeueSemaphore <- struct{}{}
-		}
-	}()
-
 	record, dequeued, err := queueOptions.Store.Dequeue(context.Background(), executorHostname, nil)
 	if err != nil {
 		return apiclient.Job{}, false, err
@@ -123,7 +112,7 @@ func (m *handler) dequeue(ctx context.Context, queueName, executorName, executor
 	}
 
 	now := m.clock.Now()
-	m.addMeta(executorName, jobMeta{queueName: queueName, record: record, started: now})
+	m.addMeta(executorName, jobMeta{queueName: queueName, recordID: record.RecordID(), started: now})
 	return job, true, nil
 }
 
@@ -160,8 +149,7 @@ func (m *handler) markComplete(ctx context.Context, queueName, executorName stri
 		return err
 	}
 
-	defer func() { m.dequeueSemaphore <- struct{}{} }()
-	_, err = queueOptions.Store.MarkComplete(ctx, job.record.RecordID())
+	_, err = queueOptions.Store.MarkComplete(ctx, job.recordID)
 	return err
 }
 
@@ -178,8 +166,7 @@ func (m *handler) markErrored(ctx context.Context, queueName, executorName strin
 		return err
 	}
 
-	defer func() { m.dequeueSemaphore <- struct{}{} }()
-	_, err = queueOptions.Store.MarkErrored(ctx, job.record.RecordID(), errorMessage)
+	_, err = queueOptions.Store.MarkErrored(ctx, job.recordID, errorMessage)
 	return err
 }
 
@@ -196,8 +183,7 @@ func (m *handler) markFailed(ctx context.Context, queueName, executorName string
 		return err
 	}
 
-	defer func() { m.dequeueSemaphore <- struct{}{} }()
-	_, err = queueOptions.Store.MarkFailed(ctx, job.record.RecordID(), errorMessage)
+	_, err = queueOptions.Store.MarkFailed(ctx, job.recordID, errorMessage)
 	return err
 }
 
@@ -214,7 +200,7 @@ func (m *handler) findMeta(queueName, executorName string, jobID int, remove boo
 	}
 
 	for i, job := range executor.jobs {
-		if job.queueName == queueName && job.record.RecordID() == jobID {
+		if job.queueName == queueName && job.recordID == jobID {
 			if remove {
 				l := len(executor.jobs) - 1
 				executor.jobs[i] = executor.jobs[l]
@@ -262,7 +248,7 @@ func (m *handler) updateMetrics() {
 				}
 			}
 
-			stat.JobIDs = append(stat.JobIDs, job.record.RecordID())
+			stat.JobIDs = append(stat.JobIDs, job.recordID)
 			stat.ExecutorNames[executorName] = struct{}{}
 			queueStats[job.queueName] = stat
 		}

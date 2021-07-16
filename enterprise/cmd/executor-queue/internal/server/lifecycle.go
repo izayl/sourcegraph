@@ -46,7 +46,7 @@ func (h *handler) unknownJobs(executorName string, ids []int) []int {
 
 	idMap := map[int]struct{}{}
 	for _, job := range executor.jobs {
-		idMap[job.record.RecordID()] = struct{}{}
+		idMap[job.recordID] = struct{}{}
 	}
 
 	unknown := make([]int, 0, len(ids))
@@ -80,7 +80,7 @@ func (h *handler) pruneJobs(executorName string, ids []int) (executor *executorM
 
 	var live []jobMeta
 	for _, job := range executor.jobs {
-		if _, ok := idMap[job.record.RecordID()]; ok || now.Sub(job.started) < h.options.UnreportedMaxAge {
+		if _, ok := idMap[job.recordID]; ok || now.Sub(job.started) < h.options.UnreportedMaxAge {
 			live = append(live, job)
 		} else {
 			dead = append(dead, job)
@@ -129,7 +129,7 @@ func (h *handler) heartbeatJob(ctx context.Context, job jobMeta) error {
 		return ErrUnknownQueue
 	}
 
-	return queueOptions.Store.Heartbeat(ctx, job.record.RecordID())
+	return queueOptions.Store.Heartbeat(ctx, job.recordID)
 }
 
 // requeueJobs releases and requeues each of the given jobs.
@@ -150,6 +150,5 @@ func (h *handler) requeueJob(ctx context.Context, job jobMeta) error {
 		return ErrUnknownQueue
 	}
 
-	defer func() { h.dequeueSemaphore <- struct{}{} }()
-	return queueOptions.Store.Requeue(ctx, job.record.RecordID(), h.clock.Now().Add(h.options.RequeueDelay))
+	return queueOptions.Store.Requeue(ctx, job.recordID, h.clock.Now().Add(h.options.RequeueDelay))
 }
