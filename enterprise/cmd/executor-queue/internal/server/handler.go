@@ -48,6 +48,8 @@ type Options struct {
 }
 
 type QueueOptions struct {
+	Name string
+
 	// Store is a required dbworker store store for each registered queue.
 	Store store.Store
 
@@ -89,12 +91,7 @@ var (
 // the job record and the locking transaction. If no job is available for processing,
 // or the server has hit its maximum transactions, a false-valued flag is returned.
 func (m *handler) dequeue(ctx context.Context, queueName, executorName, executorHostname string) (_ apiclient.Job, dequeued bool, _ error) {
-	queueOptions, ok := m.options.QueueOptions[queueName]
-	if !ok {
-		return apiclient.Job{}, false, ErrUnknownQueue
-	}
-
-	record, dequeued, err := queueOptions.Store.Dequeue(context.Background(), executorHostname, nil)
+	record, dequeued, err := m.queueOptions.Store.Dequeue(context.Background(), executorHostname, nil)
 	if err != nil {
 		return apiclient.Job{}, false, err
 	}
@@ -102,9 +99,9 @@ func (m *handler) dequeue(ctx context.Context, queueName, executorName, executor
 		return apiclient.Job{}, false, nil
 	}
 
-	job, err := queueOptions.RecordTransformer(ctx, record)
+	job, err := m.queueOptions.RecordTransformer(ctx, record)
 	if err != nil {
-		if _, err := queueOptions.Store.MarkFailed(ctx, record.RecordID(), fmt.Sprintf("failed to transform record: %s", err)); err != nil {
+		if _, err := m.queueOptions.Store.MarkFailed(ctx, record.RecordID(), fmt.Sprintf("failed to transform record: %s", err)); err != nil {
 			log15.Error("Failed to mark record as failed", "recordID", record.RecordID(), "error", err)
 		}
 
@@ -119,17 +116,12 @@ func (m *handler) dequeue(ctx context.Context, queueName, executorName, executor
 // addExecutionLogEntry calls AddExecutionLogEntry for the given job. If the job identifier
 // is not known, a false-valued flag is returned.
 func (m *handler) addExecutionLogEntry(ctx context.Context, queueName, executorName string, jobID int, entry workerutil.ExecutionLogEntry) error {
-	queueOptions, ok := m.options.QueueOptions[queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
 	_, err := m.findMeta(queueName, executorName, jobID, false)
 	if err != nil {
 		return err
 	}
 
-	if err := queueOptions.Store.AddExecutionLogEntry(ctx, jobID, entry); err != nil {
+	if err := m.queueOptions.Store.AddExecutionLogEntry(ctx, jobID, entry); err != nil {
 		return err
 	}
 
@@ -139,51 +131,36 @@ func (m *handler) addExecutionLogEntry(ctx context.Context, queueName, executorN
 // markComplete calls MarkComplete for the given job, then commits the job's transaction.
 // The job is removed from the executor's job list on success.
 func (m *handler) markComplete(ctx context.Context, queueName, executorName string, jobID int) error {
-	queueOptions, ok := m.options.QueueOptions[queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
 	job, err := m.findMeta(queueName, executorName, jobID, true)
 	if err != nil {
 		return err
 	}
 
-	_, err = queueOptions.Store.MarkComplete(ctx, job.recordID)
+	_, err = m.queueOptions.Store.MarkComplete(ctx, job.recordID)
 	return err
 }
 
 // markErrored calls MarkErrored for the given job, then commits the job's transaction.
 // The job is removed from the executor's job list on success.
 func (m *handler) markErrored(ctx context.Context, queueName, executorName string, jobID int, errorMessage string) error {
-	queueOptions, ok := m.options.QueueOptions[queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
 	job, err := m.findMeta(queueName, executorName, jobID, true)
 	if err != nil {
 		return err
 	}
 
-	_, err = queueOptions.Store.MarkErrored(ctx, job.recordID, errorMessage)
+	_, err = m.queueOptions.Store.MarkErrored(ctx, job.recordID, errorMessage)
 	return err
 }
 
 // markFailed calls MarkFailed for the given job, then commits the job's transaction.
 // The job is removed from the executor's job list on success.
 func (m *handler) markFailed(ctx context.Context, queueName, executorName string, jobID int, errorMessage string) error {
-	queueOptions, ok := m.options.QueueOptions[queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
 	job, err := m.findMeta(queueName, executorName, jobID, true)
 	if err != nil {
 		return err
 	}
 
-	_, err = queueOptions.Store.MarkFailed(ctx, job.recordID, errorMessage)
+	_, err = m.queueOptions.Store.MarkFailed(ctx, job.recordID, errorMessage)
 	return err
 }
 

@@ -124,12 +124,7 @@ func (h *handler) heartbeatJobs(ctx context.Context, executor *executorMeta) (er
 }
 
 func (h *handler) heartbeatJob(ctx context.Context, job jobMeta) error {
-	queueOptions, ok := h.options.QueueOptions[job.queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
-	return queueOptions.Store.Heartbeat(ctx, job.recordID)
+	return h.queueOptions.Store.Heartbeat(ctx, job.recordID)
 }
 
 // requeueJobs releases and requeues each of the given jobs.
@@ -145,10 +140,5 @@ func (h *handler) requeueJobs(ctx context.Context, jobs []jobMeta) (errs error) 
 
 // requeueJob requeues the given job and releases the associated transaction.
 func (h *handler) requeueJob(ctx context.Context, job jobMeta) error {
-	queueOptions, ok := h.options.QueueOptions[job.queueName]
-	if !ok {
-		return ErrUnknownQueue
-	}
-
-	return queueOptions.Store.Requeue(ctx, job.recordID, h.clock.Now().Add(h.options.RequeueDelay))
+	return h.queueOptions.Store.Requeue(ctx, job.recordID, h.clock.Now().Add(h.options.RequeueDelay))
 }

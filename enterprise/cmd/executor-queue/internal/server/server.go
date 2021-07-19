@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/derision-test/glock"
+	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
 
 	"github.com/sourcegraph/sourcegraph/internal/goroutine"
@@ -15,13 +17,24 @@ import (
 )
 
 // NewServer returns an HTTP job queue server.
-func NewServer(options Options, observationContext *observation.Context) goroutine.BackgroundRoutine {
+func NewServer(options Options, queueOptions []QueueOptions, observationContext *observation.Context) goroutine.BackgroundRoutine {
 	addr := fmt.Sprintf(":%d", options.Port)
-	handler := newHandlerWithMetrics(options, glock.NewRealClock(), observationContext)
-	httpHandler := ot.Middleware(httpserver.NewHandler(handler.setupRoutes))
-	server := httpserver.NewFromAddr(addr, &http.Server{Handler: httpHandler})
-	janitor := goroutine.NewPeriodicGoroutine(context.Background(), options.CleanupInterval, &handlerWrapper{handler})
-	return goroutine.CombinedRoutine{server, janitor}
+
+	routines := goroutine.CombinedRoutine{}
+	r := mux.NewRouter()
+	for _, queueOption := range queueOptions {
+		handler := newHandlerWithMetrics(options, queueOption, glock.NewRealClock(), observationContext)
+		httpHandler := ot.Middleware(httpserver.NewHandler(handler.setupRoutes))
+		r.Handle(fmt.Sprintf("/{queueName:(?:%s)}", regexp.QuoteMeta(queueOption.Name)), httpHandler)
+
+		janitor := goroutine.NewPeriodicGoroutine(context.Background(), options.CleanupInterval, &handlerWrapper{handler})
+		routines = append(routines, janitor)
+	}
+
+	server := httpserver.NewFromAddr(addr, &http.Server{Handler: r})
+	routines = append(routines, server)
+
+	return routines
 }
 
 type handlerWrapper struct{ handler *handler }
