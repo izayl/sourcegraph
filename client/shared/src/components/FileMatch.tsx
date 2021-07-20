@@ -4,14 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Observable } from 'rxjs'
 import { AggregableBadge, Badge } from 'sourcegraph'
 
-import {
-    FileLineMatch,
-    FileSymbolMatch,
-    FilePathMatch,
-    getFileMatchUrl,
-    getRepositoryUrl,
-    getRevision,
-} from '../search/stream'
+import { ContentMatch, SymbolMatch, PathMatch, getFileMatchUrl, getRepositoryUrl, getRevision } from '../search/stream'
 import { SettingsCascadeProps } from '../settings/settings'
 import { pluralize } from '../util/strings'
 import { useRedesignToggle } from '../util/useRedesignToggle'
@@ -44,7 +37,7 @@ interface Props extends SettingsCascadeProps {
     /**
      * The file match search result.
      */
-    result: FileLineMatch | FileSymbolMatch | FilePathMatch
+    result: ContentMatch | SymbolMatch | PathMatch
 
     /**
      * Formatted repository name to be displayed in repository link. If not
@@ -92,7 +85,7 @@ export const FileMatch: React.FunctionComponent<Props> = props => {
 
     const result = props.result
     const items: MatchItem[] =
-        result.type === 'file'
+        result.type === 'content'
             ? result.lineMatches.map(match => ({
                   highlightRanges: match.offsetAndLengths.map(([start, highlightLength]) => ({
                       start,
