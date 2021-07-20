@@ -1592,19 +1592,6 @@ func (r *searchResolver) doResults(ctx context.Context, args *search.TextParamet
 	}, err
 }
 
-// getUserAccessiblePrivateRepos returns private repos a user has access to. We
-// assume this list is very short on sourcegraph.com. In case of an error we
-// return a nil slice.
-func (r *searchResolver) getUserAccessiblePrivateRepos(ctx context.Context) []types.RepoName {
-	res, err := database.Repos(r.db).ListRepoNames(ctx, database.ReposListOptions{
-		OnlyPrivate: true,
-	})
-	if err != nil {
-		return nil
-	}
-	return res
-}
-
 // isContextError returns true if ctx.Err() is not nil or if err
 // is an error caused by context cancelation or timeout.
 func isContextError(ctx context.Context, err error) bool {
