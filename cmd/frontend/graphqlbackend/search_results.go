@@ -21,6 +21,7 @@ import (
 	otlog "github.com/opentracing/opentracing-go/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sourcegraph/sourcegraph/internal/conf"
 
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/envvar"
 	searchlogs "github.com/sourcegraph/sourcegraph/cmd/frontend/internal/search/logs"
@@ -1440,11 +1441,12 @@ func (r *searchResolver) doResults(ctx context.Context, args *search.TextParamet
 	// search results with resolved repos.
 	if args.Mode == search.ZoektGlobalSearch {
 		argsIndexed := *args
-		argsIndexed.Mode = search.ZoektGlobalSearch
+
 		// shadowing err because this err is handled immediately and should affect the
 		// rest of doResults.
 		res, err := database.Repos(r.db).ListRepoNames(ctx, database.ReposListOptions{
 			OnlyPrivate: true,
+			LimitOffset: &database.LimitOffset{Limit: search.SearchLimits(conf.Get()).MaxRepos + 1},
 		})
 		if err == nil {
 			argsIndexed.UserPrivateRepos = res
