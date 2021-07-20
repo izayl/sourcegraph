@@ -70,15 +70,15 @@ type jobMeta struct {
 }
 
 func newHandler(options Options, queueOptions QueueOptions, clock glock.Clock) *handler {
-	return newHandlerWithMetrics(options, queueOptions, clock, &observation.TestContext)
+	return newHandlerWithMetrics(options, queueOptions, clock, newQueueMetrics(&observation.TestContext))
 }
 
-func newHandlerWithMetrics(options Options, queueOptions QueueOptions, clock glock.Clock, observationContext *observation.Context) *handler {
+func newHandlerWithMetrics(options Options, queueOptions QueueOptions, clock glock.Clock, queueMetrics *QueueMetrics) *handler {
 	return &handler{
 		options:      options,
 		clock:        clock,
 		executors:    map[string]*executorMeta{},
-		queueMetrics: newQueueMetrics(observationContext),
+		queueMetrics: queueMetrics,
 	}
 }
 
