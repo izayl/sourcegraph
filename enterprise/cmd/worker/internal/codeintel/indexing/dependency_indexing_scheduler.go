@@ -120,5 +120,5 @@ func (h *dependencyIndexingSchedulerHandler) shouldIndexDependencies(ctx context
 		}
 	}
 
-	return false, nil
+	return true, nil // false, nil
 }
